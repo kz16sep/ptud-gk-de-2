@@ -3,10 +3,15 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from PIL import Image
 
+# Xóa database cũ nếu tồn tại
+if os.path.exists('tasks.db'):
+    os.remove('tasks.db')
+
+# Khởi tạo app và database
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tasks.db'
@@ -36,9 +41,19 @@ class Task(db.Model):
     description = db.Column(db.Text)
     status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    due_date = db.Column(db.DateTime, nullable=False)
     finished_at = db.Column(db.DateTime)
-    due_date = db.Column(db.DateTime)
+    estimated_hours = db.Column(db.Float, nullable=False, default=1.0)
+    priority = db.Column(db.String(20), default='medium')
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+    @property
+    def priority_color(self):
+        return {
+            'low': 'info',
+            'medium': 'warning',
+            'high': 'danger'
+        }.get(self.priority, 'secondary')
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -46,12 +61,19 @@ def load_user(user_id):
 
 # Routes
 @app.route('/')
+@login_required
 def index():
-    if current_user.is_authenticated:
-        tasks = Task.query.filter_by(user_id=current_user.id).all()
-        overdue_tasks = Task.query.filter_by(user_id=current_user.id, status='pending').filter(Task.due_date < datetime.utcnow()).count()
-        return render_template('index.html', tasks=tasks, overdue_tasks=overdue_tasks)
-    return redirect(url_for('login'))
+    tasks = Task.query.filter_by(user_id=current_user.id).all()
+    overdue_tasks = Task.query.filter(
+        Task.user_id == current_user.id,
+        Task.status != 'completed',
+        Task.due_date < datetime.utcnow()
+    ).count()
+    
+    return render_template('index.html', 
+                         tasks=tasks, 
+                         overdue_tasks=overdue_tasks,
+                         now=datetime.utcnow())
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -123,19 +145,34 @@ def upload_avatar():
 @app.route('/add_task', methods=['POST'])
 @login_required
 def add_task():
-    title = request.form.get('title')
-    description = request.form.get('description')
-    due_date = datetime.strptime(request.form.get('due_date'), '%Y-%m-%d')
+    try:
+        title = request.form.get('title')
+        description = request.form.get('description')
+        due_date = datetime.strptime(request.form.get('due_date'), '%Y-%m-%dT%H:%M')
+        
+        # Xử lý estimated_hours với giá trị mặc định
+        try:
+            estimated_hours = float(request.form.get('estimated_hours', 1.0))
+        except (TypeError, ValueError):
+            estimated_hours = 1.0
+            
+        priority = request.form.get('priority', 'medium')
+        
+        task = Task(
+            title=title,
+            description=description,
+            due_date=due_date,
+            estimated_hours=estimated_hours,
+            priority=priority,
+            user_id=current_user.id
+        )
+        db.session.add(task)
+        db.session.commit()
+        flash('Task added successfully')
+    except Exception as e:
+        flash(f'Error adding task: {str(e)}')
+        db.session.rollback()  # Rollback nếu có lỗi
     
-    task = Task(
-        title=title,
-        description=description,
-        due_date=due_date,
-        user_id=current_user.id
-    )
-    db.session.add(task)
-    db.session.commit()
-    flash('Task added successfully')
     return redirect(url_for('index'))
 
 @app.route('/update_task_status/<int:task_id>', methods=['POST'])
@@ -153,7 +190,71 @@ def update_task_status(task_id):
     flash('Task status updated')
     return redirect(url_for('index'))
 
+@app.route('/create-test-tasks')
+@login_required
+def create_test_tasks():
+    try:
+        # Overdue task
+        overdue_task = Task(
+            title="Overdue Task",
+            description="This task is 2 days overdue",
+            due_date=datetime.utcnow() - timedelta(days=2),
+            user_id=current_user.id,
+            status='pending',
+            estimated_hours=4.0,
+            priority='high'
+        )
+        
+        # Due today task
+        due_today_task = Task(
+            title="Due Today Task",
+            description="This task is due today",
+            due_date=datetime.utcnow(),
+            user_id=current_user.id,
+            status='in_progress',
+            estimated_hours=2.5,
+            priority='medium'
+        )
+        
+        # Future task
+        future_task = Task(
+            title="Future Task",
+            description="This task is due in 3 days",
+            due_date=datetime.utcnow() + timedelta(days=3),
+            user_id=current_user.id,
+            status='pending',
+            estimated_hours=1.5,
+            priority='low'
+        )
+        
+        # Completed overdue task
+        completed_overdue_task = Task(
+            title="Completed Overdue Task",
+            description="This task was completed but was overdue",
+            due_date=datetime.utcnow() - timedelta(days=1),
+            user_id=current_user.id,
+            status='completed',
+            finished_at=datetime.utcnow(),
+            estimated_hours=3.0,
+            priority='medium'
+        )
+
+        db.session.add(overdue_task)
+        db.session.add(due_today_task)
+        db.session.add(future_task)
+        db.session.add(completed_overdue_task)
+        db.session.commit()
+        
+        flash('Test tasks created successfully!')
+    except Exception as e:
+        flash(f'Error creating test tasks: {str(e)}')
+        db.session.rollback()
+    
+    return redirect(url_for('index'))
+
+# Tạo tất cả bảng trong database
+with app.app_context():
+    db.create_all()
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(debug=True) 
