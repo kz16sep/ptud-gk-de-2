@@ -24,12 +24,19 @@
 
 ### 1. Chuẩn Bị Môi Trường
 
-1. Cài đặt Python:
+1.1 Cài đặt Python:
    - Truy cập [python.org](https://www.python.org/downloads/)
    - Tải và cài đặt Python phiên bản mới nhất
    - Đảm bảo tích chọn "Add Python to PATH" khi cài đặt
+1.2 Cài đặt Visual Studio Code:
+   -Truy cập code.visualstudio.com
+   -Tải và cài đặt VS Code phiên bản mới nhất
+   -Cài đặt Python extension bằng cách:
+      -Mở VS Code
+      -Vào Extensions (Ctrl + Shift + X)
+      -Tìm Python và nhấn Install
 
-2. Kiểm tra cài đặt:
+1.3 Kiểm tra cài đặt:
    ```bash
    python --version
    pip --version
