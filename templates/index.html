@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="task-card">
+            <h3>Upload Avatar</h3>
+            <form action="{{ url_for('upload_avatar') }}" method="post" enctype="multipart/form-data" class="mb-4">
+                <div class="input-group">
+                    <input type="file" class="form-control" name="avatar" accept="image/*" required>
+                    <button class="btn btn-primary" type="submit">Upload</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="task-card">
+            <h3>Add New Task</h3>
+            <form action="{{ url_for('add_task') }}" method="post" class="mb-4">
+                <div class="mb-3">
+                    <label for="title" class="form-label">Title</label>
+                    <input type="text" class="form-control" id="title" name="title" required>
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="due_date" class="form-label">Due Date</label>
+                    <input type="date" class="form-control" id="due_date" name="due_date" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Add Task</button>
+            </form>
+        </div>
+
+        <h3 class="mb-3">Your Tasks</h3>
+        {% for task in tasks %}
+        <div class="task-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5>{{ task.title }}</h5>
+                    <p class="text-muted">{{ task.description }}</p>
+                    <small class="text-muted">
+                        Created: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}<br>
+                        Due: {{ task.due_date.strftime('%Y-%m-%d') }}
+                        {% if task.finished_at %}
+                        <br>Finished: {{ task.finished_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% endif %}
+                    </small>
+                </div>
+                <form action="{{ url_for('update_task_status', task_id=task.id) }}" method="post" class="ms-3">
+                    <select name="status" class="form-select mb-2" onchange="this.form.submit()">
+                        <option value="pending" {% if task.status == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="in_progress" {% if task.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                        <option value="completed" {% if task.status == 'completed' %}selected{% endif %}>Completed</option>
+                    </select>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="task-card">
+            <p class="text-muted">No tasks yet. Add your first task above!</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %} 
