@@ -287,6 +287,24 @@ def create_test_tasks():
     
     return redirect(url_for('index'))
 
+@app.route('/delete_task/<int:task_id>', methods=['POST'])
+@login_required
+def delete_task(task_id):
+    task = Task.query.get_or_404(task_id)
+    if task.user_id != current_user.id:
+        flash('Unauthorized action')
+        return redirect(url_for('index'))
+    
+    try:
+        db.session.delete(task)
+        db.session.commit()
+        flash('Task deleted successfully')
+    except Exception as e:
+        flash(f'Error deleting task: {str(e)}')
+        db.session.rollback()
+    
+    return redirect(url_for('index'))
+
 # Tạo tất cả bảng trong database
 with app.app_context():
     db.create_all()
