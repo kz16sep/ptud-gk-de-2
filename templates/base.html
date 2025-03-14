@@ -30,6 +30,7 @@
         .avatar-container {
             position: relative;
             display: inline-block;
+            cursor: pointer;
         }
         .overdue-badge {
             position: absolute;
@@ -42,21 +43,46 @@
             font-size: 12px;
             font-weight: bold;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            animation: pulse 2s infinite;
-            cursor: pointer;
+            animation: pulse-red 2s infinite;
+            z-index: 1000;
         }
-        @keyframes pulse {
+        .overdue-dropdown {
+            width: 300px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border: none;
+        }
+        .overdue-tasks-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .overdue-task-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .overdue-task-item:last-child {
+            border-bottom: none;
+        }
+        .overdue-task-item.critical {
+            background-color: #fff5f5;
+        }
+        .overdue-task-item.today {
+            background-color: #fff9e6;
+        }
+        @keyframes pulse-red {
             0% {
                 transform: scale(1);
-                box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
             }
-            50% {
-                transform: scale(1.05);
-                box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
+            70% {
+                transform: scale(1.1);
+                box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
             }
             100% {
                 transform: scale(1);
-                box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+                box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
             }
         }
         /* Cải thiện responsive */
@@ -108,15 +134,63 @@
                                 <div class="avatar-container">
                                     {% if current_user.avatar_path %}
                                         <img src="{{ url_for('static', filename=current_user.avatar_path) }}" 
-                                             alt="Avatar" class="rounded-circle" width="40" height="40">
+                                             alt="Avatar" class="rounded-circle" width="40" height="40"
+                                             data-bs-toggle="dropdown" aria-expanded="false">
                                     {% else %}
                                         <img src="https://avatar-placeholder.iran.liara.run/150x150" 
-                                             alt="Default Avatar" class="rounded-circle" width="40" height="40">
+                                             alt="Default Avatar" class="rounded-circle" width="40" height="40"
+                                             data-bs-toggle="dropdown" aria-expanded="false">
                                     {% endif %}
-                                    {% if overdue_tasks > 0 %}
-                                        <div class="overdue-badge" data-bs-toggle="tooltip" data-bs-placement="bottom" 
-                                             title="{{ overdue_tasks }} overdue task(s)">
-                                            {{ overdue_tasks }}
+                                    
+                                    {% if overdue_stats.total > 0 %}
+                                        <div class="overdue-badge" data-bs-toggle="dropdown" aria-expanded="false">
+                                            {{ overdue_stats.total }}
+                                        </div>
+                                        
+                                        <!-- Dropdown menu cho chi tiết tasks trễ hạn -->
+                                        <div class="dropdown-menu overdue-dropdown p-0">
+                                            <div class="card border-0">
+                                                <div class="card-header bg-danger text-white">
+                                                    <h6 class="mb-0">Overdue Tasks Alert</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    {% if overdue_stats.critical > 0 %}
+                                                        <div class="d-flex align-items-center mb-2">
+                                                            <span class="badge bg-danger me-2">{{ overdue_stats.critical }}</span>
+                                                            <span>Critical (>24h overdue)</span>
+                                                        </div>
+                                                    {% endif %}
+                                                    
+                                                    {% if overdue_stats.today > 0 %}
+                                                        <div class="d-flex align-items-center mb-2">
+                                                            <span class="badge bg-warning me-2">{{ overdue_stats.today }}</span>
+                                                            <span>Today's overdue</span>
+                                                        </div>
+                                                    {% endif %}
+                                                    
+                                                    <!-- Quick links to overdue tasks -->
+                                                    <div class="overdue-tasks-list mt-2">
+                                                        {% for task in critical_overdue %}
+                                                            <div class="overdue-task-item critical">
+                                                                <i class="fas fa-exclamation-circle text-danger"></i>
+                                                                <span>{{ task.title }}</span>
+                                                            </div>
+                                                        {% endfor %}
+                                                        
+                                                        {% for task in today_overdue %}
+                                                            <div class="overdue-task-item today">
+                                                                <i class="fas fa-clock text-warning"></i>
+                                                                <span>{{ task.title }}</span>
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                                <div class="card-footer bg-light">
+                                                    <a href="#tasks-section" class="btn btn-danger btn-sm w-100">
+                                                        View All Overdue Tasks
+                                                    </a>
+                                                </div>
+                                            </div>
                                         </div>
                                     {% endif %}
                                 </div>
@@ -159,10 +233,19 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        })
+        // Khởi tạo tất cả dropdowns
+        var dropdowns = document.querySelectorAll('.dropdown-toggle');
+        dropdowns.forEach(function(dropdown) {
+            new bootstrap.Dropdown(dropdown);
+        });
+        
+        // Scroll to tasks section when clicking "View All" button
+        document.querySelector('a[href="#tasks-section"]').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelector('#tasks-section').scrollIntoView({
+                behavior: 'smooth'
+            });
+        });
     });
     </script>
 </body>

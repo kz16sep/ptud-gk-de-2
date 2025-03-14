@@ -55,6 +55,18 @@ class Task(db.Model):
             'high': 'danger'
         }.get(self.priority, 'secondary')
 
+    @property
+    def current_status(self):
+        """Trả về trạng thái hiện tại của task"""
+        if self.status == 'completed':
+            return 'completed'
+        elif self.due_date < datetime.now() and self.status != 'completed':
+            return 'overdue'
+        elif self.status == 'in_progress':
+            return 'in_progress'
+        else:
+            return 'pending'
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -63,17 +75,40 @@ def load_user(user_id):
 @app.route('/')
 @login_required
 def index():
+    # Lấy tất cả tasks của user hiện tại
     tasks = Task.query.filter_by(user_id=current_user.id).all()
+    
+    # Tính toán chi tiết về tasks trễ hạn
+    now = datetime.now()
     overdue_tasks = Task.query.filter(
         Task.user_id == current_user.id,
         Task.status != 'completed',
-        Task.due_date < datetime.utcnow()
-    ).count()
+        Task.due_date < now
+    ).all()
+    
+    # Phân loại tasks trễ hạn theo mức độ
+    critical_overdue = [] # Trễ > 24h
+    today_overdue = []   # Trễ < 24h
+    
+    for task in overdue_tasks:
+        hours_overdue = (now - task.due_date).total_seconds() / 3600
+        if hours_overdue > 24:
+            critical_overdue.append(task)
+        else:
+            today_overdue.append(task)
+    
+    overdue_stats = {
+        'total': len(overdue_tasks),
+        'critical': len(critical_overdue),
+        'today': len(today_overdue)
+    }
     
     return render_template('index.html', 
                          tasks=tasks, 
-                         overdue_tasks=overdue_tasks,
-                         now=datetime.utcnow())
+                         overdue_stats=overdue_stats,
+                         critical_overdue=critical_overdue,
+                         today_overdue=today_overdue,
+                         now=now)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -150,11 +185,10 @@ def add_task():
         description = request.form.get('description')
         due_date = datetime.strptime(request.form.get('due_date'), '%Y-%m-%dT%H:%M')
         
-        # Xử lý estimated_hours với giá trị mặc định
-        try:
-            estimated_hours = float(request.form.get('estimated_hours', 1.0))
-        except (TypeError, ValueError):
-            estimated_hours = 1.0
+        # Lấy giờ và phút từ form
+        hours = int(request.form.get('hours', 0))
+        minutes = int(request.form.get('minutes', 0))
+        estimated_hours = hours + (minutes / 60)  # Chuyển đổi thành giờ
             
         priority = request.form.get('priority', 'medium')
         
@@ -162,6 +196,7 @@ def add_task():
             title=title,
             description=description,
             due_date=due_date,
+            created_at=datetime.now(),  # Sử dụng thời gian hiện tại
             estimated_hours=estimated_hours,
             priority=priority,
             user_id=current_user.id
@@ -171,7 +206,7 @@ def add_task():
         flash('Task added successfully')
     except Exception as e:
         flash(f'Error adding task: {str(e)}')
-        db.session.rollback()  # Rollback nếu có lỗi
+        db.session.rollback()
     
     return redirect(url_for('index'))
 

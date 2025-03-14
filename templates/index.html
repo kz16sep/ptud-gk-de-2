@@ -30,9 +30,23 @@
                         <input type="datetime-local" class="form-control" id="due_date" name="due_date" required>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label for="estimated_hours" class="form-label">Estimated Hours</label>
-                        <input type="number" class="form-control" id="estimated_hours" name="estimated_hours" 
-                               min="0" step="0.5" required>
+                        <label class="form-label">Estimated Time</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="hours" name="hours" 
+                                           min="0" value="0" required>
+                                    <span class="input-group-text">hours</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="minutes" name="minutes" 
+                                           min="0" max="59" value="0" required>
+                                    <span class="input-group-text">minutes</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="mb-3">
@@ -47,53 +61,70 @@
             </form>
         </div>
 
-        <h3 class="mb-3">Your Tasks</h3>
-        {% for task in tasks %}
-        <div class="task-card {% if task.status != 'completed' and task.due_date < now %}task-overdue{% endif %}">
-            <div class="d-flex justify-content-between align-items-start">
-                <div>
-                    <div class="d-flex align-items-center gap-2">
-                        <h5 class="mb-0">{{ task.title }}</h5>
-                        {% if task.status != 'completed' and task.due_date < now %}
-                            <span class="badge bg-danger">Overdue</span>
-                        {% endif %}
-                        {% if task.status == 'completed' %}
-                            <span class="badge bg-success">Completed</span>
-                        {% endif %}
-                        <span class="badge bg-{{ task.priority_color }}">{{ task.priority|title }}</span>
-                    </div>
-                    <p class="text-muted mt-2">{{ task.description }}</p>
-                    <div class="task-info">
-                        <small class="text-muted">
-                            <strong>Created:</strong> {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}<br>
-                            <strong>Due Date:</strong> {{ task.due_date.strftime('%Y-%m-%d %H:%M') }}<br>
-                            <strong>Estimated Hours:</strong> {{ task.estimated_hours }}<br>
-                            {% if task.due_date < now and task.status != 'completed' %}
-                                <strong class="text-danger">
-                                    Overdue by: {{ ((now - task.due_date).total_seconds() / 3600)|round|int }} hours
-                                </strong><br>
-                            {% endif %}
-                            {% if task.finished_at %}
-                                <strong>Completed:</strong> {{ task.finished_at.strftime('%Y-%m-%d %H:%M') }}
-                            {% endif %}
-                        </small>
-                    </div>
+        <div id="tasks-section">
+            <h3 class="mb-3">Your Tasks</h3>
+            
+            <div class="mb-3">
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-secondary active" data-filter="all">
+                        All Tasks
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" data-filter="overdue">
+                        Overdue ({{ overdue_stats.total }})
+                    </button>
                 </div>
-                <form action="{{ url_for('update_task_status', task_id=task.id) }}" method="post" class="ms-3">
-                    <select name="status" class="form-select {% if task.status != 'completed' and task.due_date < now %}border-danger{% endif %}" 
-                            onchange="this.form.submit()">
-                        <option value="pending" {% if task.status == 'pending' %}selected{% endif %}>Pending</option>
-                        <option value="in_progress" {% if task.status == 'in_progress' %}selected{% endif %}>In Progress</option>
-                        <option value="completed" {% if task.status == 'completed' %}selected{% endif %}>Completed</option>
-                    </select>
-                </form>
             </div>
+            
+            {% for task in tasks %}
+            <div class="task-card {% if task.status != 'completed' and task.due_date < now %}task-overdue{% endif %}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="d-flex align-items-center gap-2">
+                            <h5 class="mb-0">{{ task.title }}</h5>
+                            {% if task.status != 'completed' and task.due_date < now %}
+                                <span class="badge bg-danger">Overdue</span>
+                            {% endif %}
+                            {% if task.status == 'completed' %}
+                                <span class="badge bg-success">Completed</span>
+                            {% endif %}
+                            <span class="badge bg-{{ task.priority_color }}">{{ task.priority|title }}</span>
+                        </div>
+                        <p class="text-muted mt-2">{{ task.description }}</p>
+                        <div class="task-info">
+                            <small class="text-muted">
+                                <strong>Created:</strong> {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}<br>
+                                <strong>Due Date:</strong> {{ task.due_date.strftime('%Y-%m-%d %H:%M') }}<br>
+                                <strong>Estimated Hours:</strong> {{ task.estimated_hours }}<br>
+                                {% if task.due_date < now and task.status != 'completed' %}
+                                    <strong class="text-danger">
+                                        Overdue by: {{ ((now - task.due_date).total_seconds() / 3600)|round|int }} hours
+                                    </strong><br>
+                                {% endif %}
+                                {% if task.finished_at %}
+                                    <strong>Completed:</strong> {{ task.finished_at.strftime('%Y-%m-%d %H:%M') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                    <form action="{{ url_for('update_task_status', task_id=task.id) }}" method="post" class="ms-3">
+                        <select name="status" class="form-select {% if task.current_status == 'overdue' %}border-danger{% endif %}" 
+                                onchange="this.form.submit()">
+                            <option value="pending" {% if task.status == 'pending' and task.current_status != 'overdue' %}selected{% endif %}>Pending</option>
+                            <option value="in_progress" {% if task.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                            <option value="completed" {% if task.status == 'completed' %}selected{% endif %}>Completed</option>
+                            {% if task.current_status == 'overdue' and task.status != 'completed' %}
+                                <option value="overdue" selected>Overdue</option>
+                            {% endif %}
+                        </select>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="task-card">
+                <p class="text-muted">No tasks yet. Add your first task above!</p>
+            </div>
+            {% endfor %}
         </div>
-        {% else %}
-        <div class="task-card">
-            <p class="text-muted">No tasks yet. Add your first task above!</p>
-        </div>
-        {% endfor %}
     </div>
 </div>
 
@@ -152,6 +183,32 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const defaultDateTime = `${defaultYear}-${defaultMonth}-${defaultDay}T${defaultHours}:${defaultMinutes}`;
     document.getElementById('due_date').value = defaultDateTime;
+
+    const filterButtons = document.querySelectorAll('[data-filter]');
+    const taskCards = document.querySelectorAll('.task-card');
+    
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const filter = this.dataset.filter;
+            
+            // Update active button
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Filter tasks
+            taskCards.forEach(card => {
+                if (filter === 'all') {
+                    card.style.display = '';
+                } else if (filter === 'overdue') {
+                    if (card.classList.contains('task-overdue')) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                }
+            });
+        });
+    });
 });
 </script>
 {% endblock %} 
